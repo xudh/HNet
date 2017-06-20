@@ -412,41 +412,40 @@ static void DecodeUserData(const char *pStr, struct DeliverPDU *pPDU)
 	}
 
 	size_t len = strlen(pStr);
-	size_t dataLen = 0;			// 去头后的数据长度
 	uint8_t msg[161] = "";		// 短信内容
 	size_t msgLen = 0;			// 解析后的数据长度
-	if (pPDU->dcs & eSMSUCS2)
+	if (len > 1 && len % 2 == 0)
 	{
-		dataLen = pPDU->udl - headLen;
-		if (dataLen * 2 == len)
+		size_t dataLen = 0;			// 去头后的数据长度
+		if (pPDU->dcs & eSMSUCS2)
 		{
+			dataLen = pPDU->udl - headLen;
+			if (dataLen * 2 != len)
+				return;
 			if (String2Bytes(pStr, pPDU->ud, len) < 0)
 				return;
 			msgLen = strlen((const char *)msg);
 		}
-		else
-			return;
-	}
-	else if (pPDU->dcs & eSMS8Bit)
-	{
-		dataLen = pPDU->udl - headLen;
-		if (dataLen * 2 == len)
+		else if (pPDU->dcs & eSMS8Bit)
 		{
+			dataLen = pPDU->udl - headLen;
+			if (dataLen * 2 != len)
+				return;
 			if (String2Bytes(pStr, pPDU->ud, len) < 0)
 				return;
-
 			msgLen = Decode8bit(pPDU->ud, msg, dataLen);
 		}
-		else
-			return;
-	}
-	else	// 7Bit的
-	{
-		size_t headAlign = (7 - (headLen * 8) % 7) % 7;	// 头字节7位对齐还剩下的位
-		size_t headByte = (headLen > 0) ? 7 : 0;		// 头和对齐占用的字节(目前headLen不会大于7)
-		size_t decDataLen = ((pPDU->udl & 0x07) ? (((pPDU->udl * 7) >> 3) + 1) : (( pPDU->udl * 7) >> 3)) * 2;
-		if (decDataLen == len + headLen * 2)
+		else	// 7Bit的
 		{
+			size_t headByte = headLen * 8 / 7;		// 头占用的字节
+			size_t headAlign = (7 - (headLen * 8) % 7) % 7;	// 头字节7位对齐还剩下的位
+			size_t headByte2 = headByte + ((headAlign > 0) ? 1 : 0);	// 头和对齐位占用的字节
+			if (pPDU->udl < headByte2)
+				return;
+			// 8个7bit为一整组，否则有零的
+			size_t decDataLen = ((pPDU->udl % 8 == 0) ? (pPDU->udl * 7 / 8) : (pPDU->udl * 7 / 8 + 1)) * 2;
+			if (decDataLen != len + headLen * 2)
+				return;
 			if (String2Bytes(pStr, pPDU->ud, len) < 0)
 				return;
 
@@ -465,25 +464,21 @@ static void DecodeUserData(const char *pStr, struct DeliverPDU *pPDU)
 				}
 			}
 
-			if (pPDU->udl - headByte > 0)
+			if (pPDU->udl - headByte - alignByte > 0)
 			{
-				if (pPDU->udl - headByte - alignByte > 0)
+				size_t ret7to8 = Decode7bit(pPDU->ud + alignByte, msg + alignByte,  pPDU->udl - headByte - alignByte);
+				if (ret7to8 >= pPDU->udl - headByte - alignByte)
 				{
-					if (Decode7bit(pPDU->ud + alignByte, msg + alignByte,  pPDU->udl - headByte - alignByte) == pPDU->udl - headByte - alignByte)
-					{
-						GsmMapConvert(msg, pPDU->udl - headByte);
-						msgLen = pPDU->udl - headByte;
-					}
-				}
-				else if (alignByte > 0)
-				{
-					GsmMapConvert(msg, alignByte);
-					msgLen = alignByte;
+					GsmMapConvert(msg, ret7to8 + alignByte);
+					msgLen = ret7to8 + alignByte;
 				}
 			}
+			else if (alignByte > 0)
+			{
+				GsmMapConvert(msg, alignByte);
+				msgLen = alignByte;
+			}
 		}
-		else
-			return;
 	}
 
 	if (pPDU->pduType & 0x40)
