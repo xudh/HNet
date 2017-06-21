@@ -67,16 +67,15 @@ static const uint8_t tSmsAnsiMap[128] =
 	0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7a, 0xe4, 0xf6, 0xf1, 0xfc, 0xe0,
 };
 
-static size_t Decode7bit(const uint8_t *pSrc, uint8_t *pDst, size_t nSrcLength)
+static size_t Decode7bit(const uint8_t *pSrc, uint8_t *pDst, size_t nSrcLen)
 {
 	int nSrc = 0, nDst = 0;
 	int nByte = 0;				// 当前正在处理的组内字节的序号，范围是0-6
 	uint8_t nLeft = 0;			// 上一字节残余数据
-	uint8_t SrcLen = nSrcLength;
-	uint8_t pSrcLen = (SrcLen & 0x07) ? (((SrcLen * 7) >> 3) + 1) : (( SrcLen * 7) >> 3);	// PDU码实际长度
+	uint8_t srcInPduLen = (nSrcLen % 8 == 0) ? (nSrcLen * 7 / 8) : (nSrcLen * 7 / 8 + 1);	// PDU码实际长度
 
 	// 将源字节串每7个分为一组，解压缩成8个字节
-	while (nSrc < pSrcLen)
+	while (nSrc < srcInPduLen)
 	{
 		// 将源字节右边部分与残余数据相加，去掉最高位，得到一个目标字节
 		*pDst = ((*pSrc << nByte) | nLeft) & 0x7f;
@@ -87,7 +86,7 @@ static size_t Decode7bit(const uint8_t *pSrc, uint8_t *pDst, size_t nSrcLength)
 		++nByte;
 
 		// 到了一组最后一个字节，且尚未解码完
-		if (nByte == 7 && nDst != SrcLen)
+		if (nByte == 7 && nDst != nSrcLen)
 		{
 			*pDst = nLeft;
 			++pDst;
@@ -466,11 +465,10 @@ static void DecodeUserData(const char *pStr, struct DeliverPDU *pPDU)
 
 			if (pPDU->udl - headByte - alignByte > 0)
 			{
-				size_t ret7to8 = Decode7bit(pPDU->ud + alignByte, msg + alignByte,  pPDU->udl - headByte - alignByte);
-				if (ret7to8 >= pPDU->udl - headByte - alignByte)
+				if (Decode7bit(pPDU->ud + alignByte, msg + alignByte,  pPDU->udl - headByte - alignByte) == pPDU->udl - headByte - alignByte)
 				{
-					GsmMapConvert(msg, ret7to8 + alignByte);
-					msgLen = ret7to8 + alignByte;
+					GsmMapConvert(msg, pPDU->udl - headByte);
+					msgLen = pPDU->udl - headByte;
 				}
 			}
 			else if (alignByte > 0)
