@@ -1,0 +1,48 @@
+在CentOS6.8上用gSoap2.8.14生成Onvif代码框架，解压后进入目录，./configure
+缺什么装什么
+#yum install flex
+#yum install bison
+#yum install openssl-devel
+#./configure
+#make
+#mkdir Frame
+#cp gsoap/typemap.dat Frame
+#cd Frame
+#../gsoap/wsdl/wsdl2h -c -k -t typemap.dat -o onvif.h http://www.onvif.org/onvif/ver10/network/wsdl/remotediscovery.wsdl
+http://www.onvif.org/onvif/ver10/device/wsdl/devicemgmt.wsdl  
+http://www.onvif.org/onvif/ver20/analytics/wsdl/analytics.wsdl  
+http://www.onvif.org/onvif/ver10/analyticsdevice.wsdl  
+http://www.onvif.org/onvif/ver10/media/wsdl/media.wsdl  
+http://www.onvif.org/onvif/ver10/deviceio.wsdl  
+http://www.onvif.org/onvif/ver10/display.wsdl  
+http://www.onvif.org/onvif/ver10/event/wsdl/event.wsdl  
+http://www.onvif.org/onvif/ver20/imaging/wsdl/imaging.wsdl  
+http://www.onvif.org/onvif/ver10/recording.wsdl  
+http://www.onvif.org/onvif/ver10/replay.wsdl  
+http://www.onvif.org/onvif/ver10/search.wsdl  
+http://www.onvif.org/onvif/ver10/receiver.wsdl  
+http://www.onvif.org/onvif/ver20/ptz/wsdl/ptz.wsdl
+#注意网址间是空格而非换行，-k参数似乎不起作用，后面生成代码里还是
+有mustUnderstand, 这条命令执行完后会生成onvif.h
+#vi onvif.h
+在引用头文件的地方增加一行#import "wsse.h"
+#vi ../gsoap/import/wsa5.h
+注释掉int SOAP_ENV__Fault这块
+#../gsoap/bin/linux386/soapcpp2 -2 -c -L -x -I../gsoap/import -I../gsoap onvif.h
+生成框架代码
+#ls
+AnalyticsDeviceBinding.nsmap  PullPointSubscriptionBinding.nsmap  soapClient.c
+DeviceBinding.nsmap           ReceiverBinding.nsmap               soapH.h
+DeviceIOBinding.nsmap         RecordingBinding.nsmap              soapServer.c
+DisplayBinding.nsmap          RemoteDiscoveryBinding.nsmap        soapStub.h
+ImagingBinding.nsmap          ReplayBinding.nsmap                 typemap.dat
+MediaBinding.nsmap            RuleEngineBinding.nsmap             wsdd.nsmap
+onvif.h                       SearchBinding.nsmap
+PTZBinding.nsmap              soapC.c
+其中*.nsmap都是一样的，删除但留一个wsdd.nsmap，并修改后缀名成wsdd.h。
+#cp ../gsoap/stdsoap2.h .
+#cp ../gsoap/stdsoap2.c .
+#cp ../gsoap/custom/duration.c .
+#删除中间过程文件
+#rm -f typemap.dat onvif.h
+
