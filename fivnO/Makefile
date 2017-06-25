@@ -7,7 +7,7 @@ SRC_DIR := Source
 LIB_DIR := Library
 LIB_TARGET := libOnvif.a
 
-CFLAGS = -std=c99 -O2 -Wall -fno-strict-aliasing
+CFLAGS = -std=gnu99 -O2 -Wall -fno-strict-aliasing
 #CFLAGS = -Wno-unused-result 有些版本的gcc要用
 #CFLAGS += -DWITH_NOIDREF 可能减小体积
 CFLAGS += -I$(INC_DIR)
@@ -28,6 +28,7 @@ $(SRC_DIR)/%.o: $(SRC_DIR)/%.c
 
 $(LIB_TARGET): $(OBJS)
 	$(AR) ruc  $(LIB_TARGET) $(OBJS)
+	mv $(LIB_TARGET) $(LIB_DIR)
 
 clean:
 	rm -f $(OBJS)

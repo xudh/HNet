@@ -2,7 +2,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
-#include <Base64.h>
+#include "Base64.h"
 
 int Base64Encode(char *pDst, size_t dstSize, const void *pSrc, size_t srcLen)
 {
@@ -68,26 +68,27 @@ int Base64Decode(void *pDst, size_t dstSize, const char *pSrc)
 		41, 42, 43, 44,	45, 46, 47, 48, 49, 50, 51, -1, -1, -1, -1, -1
 	};
 
+	unsigned char *pS = (unsigned char *)pSrc;	// 要做数组下标用，防止编译警告
 	uint8_t *pD = (uint8_t *)pDst;
-	for (; len > 3; len -= 4, pSrc += 4)
+	for (; len > 3; len -= 4, pS += 4)
 	{
-		if (base64Code[pSrc[0]] == -1 || base64Code[pSrc[1]] == -1
-			|| (pSrc[2] != '=' && base64Code[pSrc[2]] == -1) || (pSrc[3] != '=' && base64Code[pSrc[3]] == -1))
+		if (base64Code[pS[0]] == -1 || base64Code[pS[1]] == -1
+			|| (pS[2] != '=' && base64Code[pS[2]] == -1) || (pS[3] != '=' && base64Code[pS[3]] == -1))
 		{
-			printf("%s:%d pSrc[0-3] = %d%d%d%d\n", __func__, __LINE__, pSrc[0], pSrc[1], pSrc[2], pSrc[3]);
+			printf("%s:%d pS[0-3] = %d%d%d%d\n", __func__, __LINE__, pS[0], pS[1], pS[2], pS[3]);
 			return -1;
 		}
 
-		*pD++ = (base64Code[pSrc[0]] << 2) | (base64Code[pSrc[1]] >> 4);
-		if (pSrc[2] == '=')
+		*pD++ = (base64Code[pS[0]] << 2) | (base64Code[pS[1]] >> 4);
+		if (pS[2] == '=')
 			break;
 		else
 		{
-			*pD++ = ((base64Code[pSrc[1]] << 4) & 0xf0) | (base64Code[pSrc[2]] >> 2);
-			if (pSrc[3] == '=')
+			*pD++ = ((base64Code[pS[1]] << 4) & 0xf0) | (base64Code[pS[2]] >> 2);
+			if (pS[3] == '=')
 				break;
 			else
-				*pD++ = ((base64Code[pSrc[2]] << 6) & 0xc0) | base64Code[pSrc[3]];
+				*pD++ = ((base64Code[pS[2]] << 6) & 0xc0) | base64Code[pS[3]];
 		}
 	}
 
@@ -100,11 +101,11 @@ int Base64Decode(void *pDst, size_t dstSize, const char *pSrc)
 	}
 	else
 	{
-		if (pSrc[3] == '=')
+		if (pS[3] == '=')
 			return 0;
 		else
 		{
-			printf("%s:%d pSrc[3] = %d\n", __func__, __LINE__, pSrc[3]);
+			printf("%s:%d pS[3] = %d\n", __func__, __LINE__, pS[3]);
 			return -1;
 		}
 	}
