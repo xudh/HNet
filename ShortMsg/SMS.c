@@ -5,6 +5,8 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdlib.h>
+#include <errno.h>
+#include <iconv.h>
 
 struct PDUAddr	// PDU地址
 {
@@ -248,28 +250,44 @@ static int UserDataHead(const char *pStr, struct UsrDataHead *pUDH)		// 长短�
 
 }
 
-static int StringBeforeComma(char *pStr, char **pCommaEnd, char *pDest, size_t dstSize)	// 找逗号，逗号前的字符串提取
+static void DealMesg(uint8_t *pData, size_t dataLen, uint8_t dcs)
 {
-	if (pStr == NULL)
+	if (dcs & eSMSUCS2)
 	{
-		*pCommaEnd = NULL;
-		return 0;
-	}
+		printf("%s:%s:%d dataLen = %zu\n", __FILE__, __func__, __LINE__, dataLen);
+		iconv_t cd = iconv_open("UTF-8", "UCS-2BE");
+		if (cd == (iconv_t)-1)
+		{
+			printf("errno = %d, means: %s\n", errno, strerror(errno));
+			return;
+		}
 
-	*pCommaEnd = strchr(pStr, ',');
-	if (*pCommaEnd != NULL)
-		**pCommaEnd = '\0';
-	size_t len = strlen(pStr);
-	if (len < dstSize)
-	{
-		strcpy(pDest, pStr);
-		return 0;
+		uint8_t utf8Data[1024] = {0};
+		size_t utf8Len = sizeof(utf8Data);
+		char *pSrc = (char *)pData, *pDst = (char *)utf8Data;
+		size_t ret = iconv(cd, &pSrc, &dataLen, &pDst, &utf8Len);
+		if (iconv(cd, &pSrc, &dataLen, &pDst, &utf8Len) == (size_t)-1)
+			printf("errno = %d, means: %s\n", errno, strerror(errno));
+		else
+		{
+			printf("dataLen = %zu, utf8Len = %zu\n", dataLen, utf8Len);
+			printf("utf8Data = %s\n", (char *)utf8Data);
+		}
+		iconv_close(cd);
 	}
-	else
-		return -1;
+	else if (dcs & eSMS8Bit)
+	{
+		printf("%s:%s:%d dataLen = %zu\n", __FILE__, __func__, __LINE__, dataLen);
+		// 彩信
+	}
+	else	// 7Bit的
+	{
+		printf("%s:%s:%d dataLen = %zu\n", __FILE__, __func__, __LINE__, dataLen);
+		printf("%s\n", (const char *)pData);
+	}
 }
 
-static void JoinLongMesg(const char *pOAAddr, const struct UsrDataHead *pUDH, const uint8_t *pData, size_t dataLen)
+static void JoinLongMesg(const char *pOAAddr, const struct UsrDataHead *pUDH, const uint8_t *pData, size_t dataLen, uint8_t dcs)
 {
 	if (pUDH->ie.total < 2)
 	{
@@ -359,7 +377,8 @@ static void JoinLongMesg(const char *pOAAddr, const struct UsrDataHead *pUDH, co
 			totalLen += dataLen;
 		}
 
-		printf("%s:%s:%d totalBuf = %s, totalLen = %zu\n", __FILE__, __func__, __LINE__, (const char *)totalBuf, totalLen);
+		//printf("%s:%s:%d totalBuf = %s, totalLen = %zu\n", __FILE__, __func__, __LINE__, (const char *)totalBuf, totalLen);
+		DealMesg(totalBuf, totalLen, dcs);
 	}
 	else
 	{
@@ -398,7 +417,10 @@ static void JoinLongMesg(const char *pOAAddr, const struct UsrDataHead *pUDH, co
 static void DecodeUserData(const char *pStr, struct DeliverPDU *pPDU)
 {
 	if (pPDU->udl < 1)
+	{
+		printf("%s:%s:%d\n", __FILE__, __func__, __LINE__);
 		return;
+	}
 
 	struct UsrDataHead udh = {0};
 	int headLen = 0;
@@ -406,7 +428,10 @@ static void DecodeUserData(const char *pStr, struct DeliverPDU *pPDU)
 	{
 		headLen = UserDataHead(pStr, &udh);
 		if (headLen < 0)
+		{
+			printf("%s:%s:%d\n", __FILE__, __func__, __LINE__);
 			return;
+		}
 		pStr += headLen * 2;
 	}
 
@@ -423,7 +448,8 @@ static void DecodeUserData(const char *pStr, struct DeliverPDU *pPDU)
 				return;
 			if (String2Bytes(pStr, pPDU->ud, len) < 0)
 				return;
-			msgLen = strlen((const char *)msg);
+			memcpy(msg, pPDU->ud, dataLen);
+			msgLen = dataLen;
 		}
 		else if (pPDU->dcs & eSMS8Bit)
 		{
@@ -480,9 +506,15 @@ static void DecodeUserData(const char *pStr, struct DeliverPDU *pPDU)
 	}
 
 	if (pPDU->pduType & 0x40)
-		JoinLongMesg(pPDU->oa.addr, &udh, msg, msgLen);
+	{
+		printf("%s:%s:%d msgLen = %zu\n", __FILE__, __func__, __LINE__, msgLen);
+		JoinLongMesg(pPDU->oa.addr, &udh, msg, msgLen, pPDU->dcs);
+	}
 	else if (msgLen > 0)
-		printf("%s:%s:%d msg = %s, msgLen = %zu\n", __FILE__, __func__, __LINE__, (const char *)msg, msgLen);
+	{
+		printf("%s:%s:%d msgLen = %zu\n", __FILE__, __func__, __LINE__, msgLen);
+		DealMesg(msg, msgLen, pPDU->dcs);
+	}
 }
 	
 void DecodePDU(const char *pStr)
@@ -507,15 +539,15 @@ void DecodePDU(const char *pStr)
 		if (String2Bytes(pStr, &pdu.pduType, 2) < 0)
 			return;
 
-		printf("%s:%d, pdu.pduType = %u\n", __func__, __LINE__, pdu.pduType);
-		pStr += 2 * 2;
+		printf("%s:%d, pdu.pduType = 0x%02x\n", __func__, __LINE__, pdu.pduType);
+		pStr += 1 * 2;
 		if (pStr + 2 < pStrEnd)
 		{
 			printf("%s:%d, pStr = %s\n", __func__, __LINE__, pStr);
 			if (String2Bytes(pStr, &pdu.oa.len, 2) < 0)
 				return;
 
-			pStr += 1 * 2;
+			pStr += 2 * 2;
 			uint8_t halfByte = pdu.oa.len % 2;		// 半字节的情况
 			if (pdu.oa.len > 0 && pdu.oa.len <= 10 * 2 && (pStr + pdu.oa.len + halfByte) < pStrEnd)
 			{
@@ -531,7 +563,10 @@ void DecodePDU(const char *pStr)
 						return;
 
 					if ((pdu.dcs&0x20) || (pdu.dcs&0x0C) == 0x0C)
+					{
+						printf("%s:%d, pdu.dcs = 0x%02x\n", __func__, __LINE__, pdu.dcs);
 						return;
+					}
 
 					pStr += 8 * 2;
 					if (String2Bytes(pStr, &pdu.udl, 2) < 0)
@@ -549,6 +584,11 @@ void DecodePDU(const char *pStr)
 
 int main(void)
 {
+	DecodePDU("07911326040000F0040B911346610089F60000208062917314080CC8F71D14969741F977FD07");
+
+	DecodePDU("0891683110304105F26405A10110F000087170727110602377060804DD4B03025957991051856D4191CF67096548671F81F300320030003100385E74003467080032003565E5003070B93002FF08672C676177ED4FE16BCF65E553D190014E0A96504E3A00356761FF0C8BF7767B5F55007700770077002E00310030003000310030002E0063006F006D53CA65F667E5");
+	DecodePDU("0891683110304105F26005A10110F00008717072711060238B060804DD4B03015C0A656C76845BA26237FF0C60A8672C6B214E0A7F516D4191CF0030002E00300032004D0042FF1B672C5468671F595799105185672C57306D4191CF5DF24F7F75280031003400350037002E00350039004D0042FF0C52694F5900320033003100310038002E00340031004D0042FF1B5F53524D4F59989D0030002E003000305143FF1B");
+	DecodePDU("0891683110304105F26405A10110F00008717072711060232F060804DD4B03038BE26D4191CF4F7F752860C551B5FF0C4EE5514D5F7154CD60A876846B635E384F7F75283002FF09");
 	return 0;
 }
 
