@@ -12,7 +12,11 @@ CFLAGS = -std=gnu99 -O2 -Wall -fno-strict-aliasing
 CFLAGS += -I$(INC_DIR)
 
 OBJS :=	$(SRC_DIR)/NetInterface		\
-		$(SRC_DIR)/NetIConfig
+		$(SRC_DIR)/NetIConfig		\
+		$(SRC_DIR)/Domain			\
+		$(SRC_DIR)/TCPUDP			\
+		$(SRC_DIR)/DNS				\
+		$(SRC_DIR)/Route
 
 OBJS := $(foreach obj, $(OBJS), $(obj).o)
 $(SRC_DIR)/%.o: $(SRC_DIR)/%.c
