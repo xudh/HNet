@@ -24,7 +24,7 @@ $(SRC_DIR)/%.o: $(SRC_DIR)/%.c
 
 $(LIB_TARGET): $(OBJS)
 	$(AR) ruc  $(LIB_TARGET) $(OBJS)
-	mv $(LIB_TARGET) $(LIB_DIR)
+	mv $(LIB_TARGET) $(LIB_DIR)/
 
 clean:
 	rm -f $(OBJS)
