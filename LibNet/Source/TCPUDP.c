@@ -11,7 +11,7 @@
 
 int ConnectToServer(const char *pSrvIp, uint16_t port, _Bool tcpOrUdp)
 {
-	if (port == 0 || strcmp(pSrvIp, "0.0.0.0") == 0 || strcmp(pSrvIp, "127.0.0.1") == 0)
+	if (port == 0 || strcmp(pSrvIp, "0.0.0.0") == 0)
 	{
 		printf("%s:%d pSrvIp = %s, port = %"PRIu16" won't connect\n", __func__, __LINE__, pSrvIp, port);
 		return -1;
@@ -52,5 +52,41 @@ int ConnectToServer(const char *pSrvIp, uint16_t port, _Bool tcpOrUdp)
 	}
 
 	return sockFD;
+}
+
+int NetServer(const char *pIp, uint16_t port, _Bool tcpOrUdp, size_t maxLink)
+{
+	int sockFD = -1;
+	if (tcpOrUdp)
+		sockFD = socket(AF_INET, SOCK_STREAM, 0);
+	else
+		sockFD = socket(PF_INET, SOCK_DGRAM, 0);
+	if (sockFD < 0)
+	{
+		printf("%s:%d errno = %d, means: %s.\n", __func__, __LINE__, errno, strerror(errno));
+		return -1;
+	}
+	return sockFD;
+}
+
+int SetMuticastOpt(int sockFD, const char *pIp)		// 设置组播选项
+{
+	unsigned char cEnable = 1;
+	if (setsockopt(sockFD, IPPROTO_IP, IP_MULTICAST_LOOP, &cEnable, sizeof(cEnable)) != 0)
+	{
+		printf("%s:%d errno = %d, means: %s\n", __func__, __LINE__, errno, strerror(errno));
+		return -1;
+	}
+
+	struct ip_mreq mreq = {{0}};
+	mreq.imr_multiaddr.s_addr = inet_addr("239.255.255.250");
+	mreq.imr_interface.s_addr = inet_addr(pIp);//htonl(INADDR_ANY);
+	if (setsockopt(sockFD, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) != 0)
+	{
+		printf("%s:%d errno = %d, means: %s\n", __func__, __LINE__, errno, strerror(errno));
+		return -1;
+	}
+
+	return 0;
 }
 
