@@ -122,7 +122,7 @@ size_t OnvifDiscovery(struct IPCInfo ipcInfo[], size_t count, struct in_addr *pI
 	{
 		// 发送组播消息成功后，开始循环接收各位设备发送过来的消息
 		struct __wsdd__ProbeMatches resp = {0};
-		while (soap_recv___wsdd__ProbeMatches(pSoap, &resp) == SOAP_OK)
+		while (devCnt < count && soap_recv___wsdd__ProbeMatches(pSoap, &resp) == SOAP_OK)
 		{
 			if (resp.wsdd__ProbeMatches == NULL || resp.wsdd__ProbeMatches->ProbeMatch == NULL || resp.wsdd__ProbeMatches->ProbeMatch->XAddrs == NULL
 						|| resp.wsdd__ProbeMatches->ProbeMatch->wsa__EndpointReference.Address == NULL)
